@@ -2,11 +2,11 @@ package ai
 
 import (
 	"fmt"
-	"syscall"
+	"os/exec"
+	"runtime"
 
 	"github.com/bluefunda/cai-cli/internal/auth"
 	"github.com/spf13/cobra"
-	"golang.org/x/term"
 )
 
 var authCmd = &cobra.Command{
@@ -18,26 +18,44 @@ var authCmd = &cobra.Command{
 var loginCmd = &cobra.Command{
 	Use:   "login",
 	Short: "Login to your account",
-	Long:  `Authenticate with your username and password to access the CAI platform.`,
+	Long:  `Authenticate using OAuth device authorization flow. Opens browser for authentication.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		username, _ := cmd.Flags().GetString("username")
-		if username == "" {
-			fmt.Print("Username: ")
-			fmt.Scanln(&username)
-		}
-
-		fmt.Print("Password: ")
-		passwordBytes, err := term.ReadPassword(int(syscall.Stdin))
-		if err != nil {
-			return fmt.Errorf("failed to read password: %w", err)
-		}
-		fmt.Println()
-		password := string(passwordBytes)
-
 		authClient := auth.NewClient(cfg)
-		tokenResp, err := authClient.LoginWithPassword(username, password)
+
+		// Start device authorization flow
+		fmt.Println("Initiating device authorization...")
+		deviceResp, err := authClient.StartDeviceAuth()
 		if err != nil {
-			return fmt.Errorf("login failed: %w", err)
+			return fmt.Errorf("failed to start device authorization: %w", err)
+		}
+
+		// Display verification instructions
+		fmt.Println()
+		fmt.Println("To authenticate, please visit:")
+		fmt.Printf("  %s\n", deviceResp.VerificationURI)
+		fmt.Println()
+		fmt.Printf("And enter code: %s\n", deviceResp.UserCode)
+		fmt.Println()
+
+		// Try to open browser automatically
+		noBrowser, _ := cmd.Flags().GetBool("no-browser")
+		if !noBrowser {
+			url := deviceResp.VerificationURIComplete
+			if url == "" {
+				url = deviceResp.VerificationURI
+			}
+			if err := openBrowser(url); err == nil {
+				fmt.Println("Browser opened automatically.")
+			}
+		}
+
+		fmt.Println("Waiting for authorization...")
+		fmt.Println()
+
+		// Poll for token
+		tokenResp, err := authClient.PollForToken(deviceResp.DeviceCode, deviceResp.Interval)
+		if err != nil {
+			return fmt.Errorf("authorization failed: %w", err)
 		}
 
 		cfg.AccessToken = tokenResp.AccessToken
@@ -50,6 +68,22 @@ var loginCmd = &cobra.Command{
 		fmt.Println("Login successful!")
 		return nil
 	},
+}
+
+// openBrowser opens the specified URL in the default browser
+func openBrowser(url string) error {
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = exec.Command("open", url)
+	case "linux":
+		cmd = exec.Command("xdg-open", url)
+	case "windows":
+		cmd = exec.Command("cmd", "/c", "start", url)
+	default:
+		return fmt.Errorf("unsupported platform")
+	}
+	return cmd.Start()
 }
 
 var logoutCmd = &cobra.Command{
@@ -98,5 +132,5 @@ func init() {
 	authCmd.AddCommand(logoutCmd)
 	authCmd.AddCommand(statusCmd)
 
-	loginCmd.Flags().StringP("username", "u", "", "Username for login")
+	loginCmd.Flags().Bool("no-browser", false, "Don't open browser automatically")
 }
