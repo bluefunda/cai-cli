@@ -6,23 +6,29 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os/exec"
+	"runtime"
 	"strings"
 	"time"
 
 	"github.com/bluefunda/cai-cli/internal/config"
 )
 
-// TokenResponse represents the OAuth2 token response
+// TokenResponse holds the tokens returned by Keycloak.
 type TokenResponse struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
 	ExpiresIn    int    `json:"expires_in"`
 	TokenType    string `json:"token_type"`
-	Scope        string `json:"scope"`
 }
 
-// DeviceCodeResponse represents the device authorization response
-type DeviceCodeResponse struct {
+// Expiry returns the absolute expiry time based on ExpiresIn seconds.
+func (t *TokenResponse) Expiry() time.Time {
+	return time.Now().Add(time.Duration(t.ExpiresIn) * time.Second)
+}
+
+// deviceAuthResponse is the response from the device authorization endpoint.
+type deviceAuthResponse struct {
 	DeviceCode              string `json:"device_code"`
 	UserCode                string `json:"user_code"`
 	VerificationURI         string `json:"verification_uri"`
@@ -31,190 +37,163 @@ type DeviceCodeResponse struct {
 	Interval                int    `json:"interval"`
 }
 
-// Client handles authentication operations
-type Client struct {
-	cfg        *config.Config
-	httpClient *http.Client
-}
+// LoginWithDevice performs an OAuth2 Device Authorization Grant (RFC 8628).
+// It shows a user code, opens the browser for verification, and polls
+// until the user completes login.
+func LoginWithDevice(domain string) (*TokenResponse, error) {
+	baseURL := config.AuthURL(domain)
 
-// NewClient creates a new auth client
-func NewClient(cfg *config.Config) *Client {
-	return &Client{
-		cfg: cfg,
-		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
-		},
+	// Step 1: Request device code
+	deviceURL := baseURL + "/auth/device"
+	data := url.Values{
+		"client_id": {config.DefaultClientID},
+		"scope":     {"openid"},
 	}
-}
 
-// StartDeviceAuth initiates the device authorization flow
-func (c *Client) StartDeviceAuth() (*DeviceCodeResponse, error) {
-	deviceAuthURL := fmt.Sprintf("%s/realms/%s/protocol/openid-connect/auth/device", c.cfg.AuthURL, c.cfg.Realm)
-
-	data := url.Values{}
-	data.Set("client_id", c.cfg.ClientID)
-	data.Set("scope", "openid profile email offline_access")
-
-	req, err := http.NewRequest("POST", deviceAuthURL, strings.NewReader(data.Encode()))
+	resp, err := http.Post(deviceURL, "application/x-www-form-urlencoded", strings.NewReader(data.Encode()))
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %w", err)
+		return nil, fmt.Errorf("device auth request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
+		return nil, fmt.Errorf("read response: %w", err)
 	}
-
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("device authorization failed: %s", string(body))
+		return nil, fmt.Errorf("device auth failed (HTTP %d): %s", resp.StatusCode, string(body))
 	}
 
-	var deviceResp DeviceCodeResponse
-	if err := json.Unmarshal(body, &deviceResp); err != nil {
-		return nil, fmt.Errorf("failed to parse device response: %w", err)
+	var dev deviceAuthResponse
+	if err := json.Unmarshal(body, &dev); err != nil {
+		return nil, fmt.Errorf("parse device response: %w", err)
 	}
 
-	return &deviceResp, nil
+	// Step 2: Show user code and open browser
+	verifyURL := dev.VerificationURIComplete
+	if verifyURL == "" {
+		verifyURL = dev.VerificationURI
+	}
+
+	fmt.Printf("\nOpen this URL in your browser:\n  %s\n\n", verifyURL)
+	fmt.Printf("Enter code: %s\n\n", dev.UserCode)
+	fmt.Println("Waiting for login...")
+
+	_ = openBrowser(verifyURL)
+
+	// Step 3: Poll for token
+	interval := dev.Interval
+	if interval < 5 {
+		interval = 5
+	}
+	deadline := time.Now().Add(time.Duration(dev.ExpiresIn) * time.Second)
+
+	tokenURL := baseURL + "/token"
+	for time.Now().Before(deadline) {
+		time.Sleep(time.Duration(interval) * time.Second)
+
+		tok, done, err := pollToken(tokenURL, dev.DeviceCode)
+		if err != nil {
+			return nil, err
+		}
+		if done {
+			return tok, nil
+		}
+	}
+
+	return nil, fmt.Errorf("login timed out (code expired)")
 }
 
-// PollForToken polls the token endpoint waiting for user authorization
-func (c *Client) PollForToken(deviceCode string, interval int) (*TokenResponse, error) {
-	tokenURL := fmt.Sprintf("%s/realms/%s/protocol/openid-connect/token", c.cfg.AuthURL, c.cfg.Realm)
-
-	pollInterval := time.Duration(interval) * time.Second
-	if pollInterval < 5*time.Second {
-		pollInterval = 5 * time.Second
+// pollToken polls the token endpoint once. Returns (token, true, nil) on success,
+// (nil, false, nil) if still pending, or (nil, false, err) on fatal error.
+func pollToken(tokenURL, deviceCode string) (*TokenResponse, bool, error) {
+	data := url.Values{
+		"grant_type":  {"urn:ietf:params:oauth:grant-type:device_code"},
+		"client_id":   {config.DefaultClientID},
+		"device_code": {deviceCode},
 	}
 
-	for {
-		data := url.Values{}
-		data.Set("grant_type", "urn:ietf:params:oauth:grant-type:device_code")
-		data.Set("client_id", c.cfg.ClientID)
-		data.Set("device_code", deviceCode)
-
-		req, err := http.NewRequest("POST", tokenURL, strings.NewReader(data.Encode()))
-		if err != nil {
-			return nil, fmt.Errorf("failed to create request: %w", err)
-		}
-		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-		resp, err := c.httpClient.Do(req)
-		if err != nil {
-			return nil, fmt.Errorf("failed to send request: %w", err)
-		}
-
-		body, err := io.ReadAll(resp.Body)
-		resp.Body.Close()
-		if err != nil {
-			return nil, fmt.Errorf("failed to read response: %w", err)
-		}
-
-		if resp.StatusCode == http.StatusOK {
-			var tokenResp TokenResponse
-			if err := json.Unmarshal(body, &tokenResp); err != nil {
-				return nil, fmt.Errorf("failed to parse token response: %w", err)
-			}
-			return &tokenResp, nil
-		}
-
-		// Check for pending/slow_down errors
-		var errResp struct {
-			Error            string `json:"error"`
-			ErrorDescription string `json:"error_description"`
-		}
-		if err := json.Unmarshal(body, &errResp); err == nil {
-			switch errResp.Error {
-			case "authorization_pending":
-				// User hasn't authorized yet, keep polling
-				time.Sleep(pollInterval)
-				continue
-			case "slow_down":
-				// Increase polling interval
-				pollInterval += 5 * time.Second
-				time.Sleep(pollInterval)
-				continue
-			case "expired_token":
-				return nil, fmt.Errorf("device code expired. Please try again")
-			case "access_denied":
-				return nil, fmt.Errorf("access denied by user")
-			default:
-				return nil, fmt.Errorf("authorization failed: %s - %s", errResp.Error, errResp.ErrorDescription)
-			}
-		}
-
-		return nil, fmt.Errorf("unexpected response: %s", string(body))
-	}
-}
-
-// RefreshToken refreshes the access token using a refresh token
-func (c *Client) RefreshToken(refreshToken string) (*TokenResponse, error) {
-	tokenURL := fmt.Sprintf("%s/realms/%s/protocol/openid-connect/token", c.cfg.AuthURL, c.cfg.Realm)
-
-	data := url.Values{}
-	data.Set("grant_type", "refresh_token")
-	data.Set("client_id", c.cfg.ClientID)
-	data.Set("refresh_token", refreshToken)
-
-	req, err := http.NewRequest("POST", tokenURL, strings.NewReader(data.Encode()))
+	resp, err := http.Post(tokenURL, "application/x-www-form-urlencoded", strings.NewReader(data.Encode()))
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %w", err)
+		return nil, false, fmt.Errorf("token poll: %w", err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
+		return nil, false, fmt.Errorf("read response: %w", err)
 	}
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("token refresh failed: %s", string(body))
+	if resp.StatusCode == http.StatusOK {
+		var tok TokenResponse
+		if err := json.Unmarshal(body, &tok); err != nil {
+			return nil, false, fmt.Errorf("parse token: %w", err)
+		}
+		return &tok, true, nil
 	}
 
-	var tokenResp TokenResponse
-	if err := json.Unmarshal(body, &tokenResp); err != nil {
-		return nil, fmt.Errorf("failed to parse token response: %w", err)
+	// Check error type
+	var errResp struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(body, &errResp); err == nil {
+		switch errResp.Error {
+		case "authorization_pending", "slow_down":
+			return nil, false, nil // keep polling
+		case "expired_token":
+			return nil, false, fmt.Errorf("device code expired — run 'ai login' again")
+		case "access_denied":
+			return nil, false, fmt.Errorf("login denied by user")
+		}
 	}
 
-	return &tokenResp, nil
+	return nil, false, fmt.Errorf("auth failed (HTTP %d): %s", resp.StatusCode, string(body))
 }
 
-// Logout invalidates the current session
-func (c *Client) Logout(refreshToken string) error {
-	logoutURL := fmt.Sprintf("%s/realms/%s/protocol/openid-connect/logout", c.cfg.AuthURL, c.cfg.Realm)
-
-	data := url.Values{}
-	data.Set("client_id", c.cfg.ClientID)
-	data.Set("refresh_token", refreshToken)
-
-	req, err := http.NewRequest("POST", logoutURL, strings.NewReader(data.Encode()))
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
+// Refresh performs a Keycloak refresh_token grant.
+func Refresh(domain, refreshToken string) (*TokenResponse, error) {
+	tokenURL := config.AuthURL(domain) + "/token"
+	data := url.Values{
+		"grant_type":    {"refresh_token"},
+		"client_id":     {config.DefaultClientID},
+		"refresh_token": {refreshToken},
 	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	return postToken(tokenURL, data)
+}
 
-	resp, err := c.httpClient.Do(req)
+func postToken(tokenURL string, data url.Values) (*TokenResponse, error) {
+	resp, err := http.Post(tokenURL, "application/x-www-form-urlencoded", strings.NewReader(data.Encode()))
 	if err != nil {
-		return fmt.Errorf("failed to send request: %w", err)
+		return nil, fmt.Errorf("token request: %w", err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("logout failed: %s", string(body))
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response: %w", err)
 	}
 
-	return nil
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("auth failed (HTTP %d): %s", resp.StatusCode, string(body))
+	}
+
+	var tok TokenResponse
+	if err := json.Unmarshal(body, &tok); err != nil {
+		return nil, fmt.Errorf("parse token: %w", err)
+	}
+	return &tok, nil
+}
+
+// openBrowser opens a URL in the default browser.
+func openBrowser(url string) error {
+	switch runtime.GOOS {
+	case "darwin":
+		return exec.Command("open", url).Start()
+	case "linux":
+		return exec.Command("xdg-open", url).Start()
+	case "windows":
+		return exec.Command("cmd", "/c", "start", url).Start()
+	default:
+		return fmt.Errorf("unsupported platform %s", runtime.GOOS)
+	}
 }

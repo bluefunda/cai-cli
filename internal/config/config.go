@@ -1,109 +1,132 @@
 package config
 
 import (
-	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"time"
+
+	"gopkg.in/yaml.v3"
 )
 
+// Platform defaults — no user input needed.
 const (
-	configFileName = "config.json"
-	configDirName  = ".cai-cli"
+	DefaultGatewayURL = "https://ai.bluefunda.com"
+	DefaultBFFURL     = "localhost:9090"
+	DefaultDomain     = "bluefunda.com"
+	DefaultRealm      = "trm"
+	DefaultClientID   = "cai-cli"
 )
 
-// Config holds the CLI configuration
+// AuthURL returns the Keycloak OpenID Connect base URL.
+func AuthURL(domain string) string {
+	return fmt.Sprintf("https://auth.%s/realms/%s/protocol/openid-connect", domain, DefaultRealm)
+}
+
+// Config represents the CLI configuration stored in ~/.cai/config.yaml.
 type Config struct {
-	APIBaseURL   string `json:"api_base_url"`
-	AuthURL      string `json:"auth_url"`
-	Realm        string `json:"realm"`
-	ClientID     string `json:"client_id"`
-	ClientSecret string `json:"client_secret,omitempty"`
-	AccessToken  string `json:"access_token,omitempty"`
-	RefreshToken string `json:"refresh_token,omitempty"`
+	GatewayURL string   `yaml:"gateway_url"`
+	BFFURL     string   `yaml:"bff_url"`
+	Domain     string   `yaml:"domain"`
+	Auth       Auth     `yaml:"auth"`
+	Defaults   Defaults `yaml:"defaults"`
 }
 
-// DefaultConfig returns the default configuration
-func DefaultConfig() *Config {
-	return &Config{
-		APIBaseURL: "https://api.bluefunda.com/ai",
-		AuthURL:    "https://auth.bluefunda.com",
-		Realm:      "trm",
-		ClientID:   "cai-cli",
-	}
+// Auth holds persisted tokens.
+type Auth struct {
+	AccessToken  string    `yaml:"access_token"`
+	RefreshToken string    `yaml:"refresh_token"`
+	TokenExpiry  time.Time `yaml:"token_expiry"`
 }
 
-// configDir returns the path to the config directory
+// Defaults holds default CLI settings.
+type Defaults struct {
+	Model  string `yaml:"model"`
+	Output string `yaml:"output"`
+}
+
+// configDir returns ~/.cai, creating it if needed.
 func configDir() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("home directory: %w", err)
 	}
-	return filepath.Join(home, configDirName), nil
+	dir := filepath.Join(home, ".cai")
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return "", fmt.Errorf("create config dir: %w", err)
+	}
+	return dir, nil
 }
 
-// configPath returns the path to the config file
+// configPath returns the full path to the config file.
 func configPath() (string, error) {
 	dir, err := configDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, configFileName), nil
+	return filepath.Join(dir, "config.yaml"), nil
 }
 
-// Load loads the configuration from disk
+// Load reads the config from ~/.cai/config.yaml.
+// Returns defaults if the file does not exist.
 func Load() (*Config, error) {
 	path, err := configPath()
 	if err != nil {
 		return nil, err
 	}
-
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return DefaultConfig(), nil
+			return defaultConfig(), nil
 		}
-		return nil, err
+		return nil, fmt.Errorf("read config: %w", err)
 	}
-
 	var cfg Config
-	if err := json.Unmarshal(data, &cfg); err != nil {
-		return nil, err
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return nil, fmt.Errorf("parse config: %w", err)
 	}
-
+	// Backfill defaults for missing fields
+	if cfg.GatewayURL == "" {
+		cfg.GatewayURL = DefaultGatewayURL
+	}
+	if cfg.BFFURL == "" {
+		cfg.BFFURL = DefaultBFFURL
+	}
+	if cfg.Domain == "" {
+		cfg.Domain = DefaultDomain
+	}
+	if cfg.Defaults.Model == "" {
+		cfg.Defaults.Model = "openai"
+	}
 	return &cfg, nil
 }
 
-// Save saves the configuration to disk
-func (c *Config) Save() error {
-	dir, err := configDir()
-	if err != nil {
-		return err
+func defaultConfig() *Config {
+	return &Config{
+		GatewayURL: DefaultGatewayURL,
+		BFFURL:     DefaultBFFURL,
+		Domain:     DefaultDomain,
+		Defaults:   Defaults{Model: "openai", Output: "text"},
 	}
+}
 
-	if err := os.MkdirAll(dir, 0700); err != nil {
-		return err
-	}
-
+// Save writes the config to ~/.cai/config.yaml.
+func Save(cfg *Config) error {
 	path, err := configPath()
 	if err != nil {
 		return err
 	}
-
-	data, err := json.MarshalIndent(c, "", "  ")
+	data, err := yaml.Marshal(cfg)
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal config: %w", err)
 	}
-
-	return os.WriteFile(path, data, 0600)
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		return fmt.Errorf("write config: %w", err)
+	}
+	return nil
 }
 
-// ClearTokens removes stored tokens
-func (c *Config) ClearTokens() {
-	c.AccessToken = ""
-	c.RefreshToken = ""
-}
-
-// HasToken returns true if an access token is stored
-func (c *Config) HasToken() bool {
-	return c.AccessToken != ""
+// TokenValid returns true if the access token exists and has not expired.
+func (c *Config) TokenValid() bool {
+	return c.Auth.AccessToken != "" && time.Now().Before(c.Auth.TokenExpiry)
 }
