@@ -2,12 +2,19 @@ package grpc
 
 import (
 	"context"
+	"crypto/tls"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"net"
+	"strings"
 	"sync"
 	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -18,6 +25,32 @@ import (
 
 // DefaultTimeout for unary RPCs.
 const DefaultTimeout = 30 * time.Second
+
+// PingTimeout for health checks.
+const PingTimeout = 5 * time.Second
+
+// Ping checks gRPC connectivity to the target without authentication.
+func Ping(target string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), PingTimeout)
+	defer cancel()
+
+	cc, err := grpc.NewClient(target, transportCreds(target))
+	if err != nil {
+		return fmt.Errorf("dial: %w", err)
+	}
+	defer cc.Close()
+
+	cc.Connect()
+	for {
+		state := cc.GetState()
+		if state == connectivity.Ready {
+			return nil
+		}
+		if !cc.WaitForStateChange(ctx, state) {
+			return fmt.Errorf("unreachable (state: %s)", state)
+		}
+	}
+}
 
 // TokenSource provides access tokens for gRPC metadata injection.
 // It handles token refresh transparently.
@@ -63,13 +96,14 @@ type Conn struct {
 
 // Dial establishes a gRPC connection to the BFF service.
 // It configures auth metadata injection and default timeouts.
+// TLS is used automatically for remote targets; localhost uses plaintext.
 func Dial(target string, ts *TokenSource, opts ...grpc.DialOption) (*Conn, error) {
 	if target == "" {
 		return nil, fmt.Errorf("bff_url not configured; run 'ai login' or pass --bff")
 	}
 
 	defaults := []grpc.DialOption{
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		transportCreds(target),
 		grpc.WithUnaryInterceptor(authUnaryInterceptor(ts)),
 		grpc.WithStreamInterceptor(authStreamInterceptor(ts)),
 	}
@@ -83,6 +117,19 @@ func Dial(target string, ts *TokenSource, opts ...grpc.DialOption) (*Conn, error
 		cc:     cc,
 		Client: pb.NewBFFServiceClient(cc),
 	}, nil
+}
+
+// transportCreds returns TLS credentials for remote targets and
+// plaintext (insecure) credentials for localhost/loopback addresses.
+func transportCreds(target string) grpc.DialOption {
+	host := target
+	if h, _, err := net.SplitHostPort(target); err == nil {
+		host = h
+	}
+	if host == "localhost" || host == "127.0.0.1" || host == "::1" {
+		return grpc.WithTransportCredentials(insecure.NewCredentials())
+	}
+	return grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{}))
 }
 
 // Close closes the underlying gRPC connection.
@@ -150,14 +197,46 @@ func authStreamInterceptor(ts *TokenSource) grpc.StreamClientInterceptor {
 	}
 }
 
-// attachToken reads the current token and attaches it as gRPC metadata.
+// attachToken reads the current token, extracts the user ID (sub claim) from
+// the JWT, and attaches authorization, realm, and user ID as gRPC metadata.
 func attachToken(ctx context.Context, ts *TokenSource) (context.Context, error) {
 	token, err := ts.Token()
 	if err != nil {
 		return ctx, err
 	}
-	md := metadata.Pairs("authorization", "Bearer "+token)
+	sub, err := subFromJWT(token)
+	if err != nil {
+		return ctx, fmt.Errorf("extract user ID from token: %w", err)
+	}
+	md := metadata.Pairs(
+		"authorization", "Bearer "+token,
+		"x-realm", config.DefaultRealm,
+		"x-user-id", sub,
+	)
 	return metadata.NewOutgoingContext(ctx, md), nil
+}
+
+// subFromJWT decodes the JWT payload and returns the sub claim.
+// No signature verification — the BFF validates the token.
+func subFromJWT(token string) (string, error) {
+	parts := strings.SplitN(token, ".", 3)
+	if len(parts) != 3 {
+		return "", fmt.Errorf("invalid JWT format")
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return "", fmt.Errorf("decode JWT payload: %w", err)
+	}
+	var claims struct {
+		Sub string `json:"sub"`
+	}
+	if err := json.Unmarshal(payload, &claims); err != nil {
+		return "", fmt.Errorf("parse JWT claims: %w", err)
+	}
+	if claims.Sub == "" {
+		return "", fmt.Errorf("JWT missing sub claim")
+	}
+	return claims.Sub, nil
 }
 
 // ContextWithTimeout returns a context with the default unary timeout.

@@ -12,7 +12,7 @@ import (
 // Platform defaults — no user input needed.
 const (
 	DefaultGatewayURL = "https://ai.bluefunda.com"
-	DefaultBFFURL     = "localhost:9090"
+	DefaultBFFURL     = "cli.bluefunda.com:443"
 	DefaultDomain     = "bluefunda.com"
 	DefaultRealm      = "trm"
 	DefaultClientID   = "cai-cli"

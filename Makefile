@@ -1,4 +1,4 @@
-.PHONY: build clean vet fmt tidy test proto
+.PHONY: build clean vet fmt tidy test proto snapshot release
 
 BINARY := ai
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
@@ -9,6 +9,7 @@ build: tidy
 
 clean:
 	rm -f $(BINARY)
+	rm -rf dist/
 
 vet:
 	go vet ./...
@@ -28,3 +29,9 @@ test-cover:
 
 proto:
 	./scripts/generate-proto.sh
+
+snapshot:
+	goreleaser release --snapshot --clean
+
+release:
+	goreleaser release --clean

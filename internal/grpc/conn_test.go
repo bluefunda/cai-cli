@@ -86,9 +86,13 @@ func TestTokenSource_NoToken(t *testing.T) {
 }
 
 func TestAttachToken(t *testing.T) {
+	// Fake JWT: header.payload.signature
+	// Payload: {"sub":"test-user-123"}
+	testJWT := "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0LXVzZXItMTIzIn0.dGVzdC1zaWc"
+
 	cfg := &config.Config{
 		Auth: config.Auth{
-			AccessToken: "test-token",
+			AccessToken: testJWT,
 			TokenExpiry: time.Now().Add(1 * time.Hour),
 		},
 	}
@@ -105,11 +109,18 @@ func TestAttachToken(t *testing.T) {
 	}
 
 	authValues := md.Get("authorization")
-	if len(authValues) == 0 {
-		t.Fatal("no authorization metadata found")
+	if len(authValues) == 0 || authValues[0] != "Bearer "+testJWT {
+		t.Fatalf("expected 'Bearer %s', got %q", testJWT, authValues)
 	}
-	if authValues[0] != "Bearer test-token" {
-		t.Fatalf("expected 'Bearer test-token', got %q", authValues[0])
+
+	realmValues := md.Get("x-realm")
+	if len(realmValues) == 0 || realmValues[0] != "trm" {
+		t.Fatalf("expected x-realm 'trm', got %q", realmValues)
+	}
+
+	userIDValues := md.Get("x-user-id")
+	if len(userIDValues) == 0 || userIDValues[0] != "test-user-123" {
+		t.Fatalf("expected x-user-id 'test-user-123', got %q", userIDValues)
 	}
 }
 

@@ -1,0 +1,91 @@
+version: 2
+
+project_name: ai
+
+builds:
+  - id: ai
+    main: ./cmd/ai
+    binary: ai
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X github.com/bluefunda/cai-cli/internal/cmd.Version={{ .Version }}
+    flags:
+      - -trimpath
+
+archives:
+  - id: ai
+    name_template: "ai_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats:
+      - tar.gz
+      - zip
+    format_overrides:
+      - goos: darwin
+        formats:
+          - zip
+      - goos: linux
+        formats:
+          - tar.gz
+    files:
+      - none*
+
+checksum:
+  name_template: "checksums.txt"
+  algorithm: sha256
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
+      - "^chore:"
+
+release:
+  github:
+    owner: bluefunda
+    name: cai-cli
+  draft: false
+  replace_existing_draft: true
+  name_template: "AI CLI v{{ .Version }}"
+  header: |
+    ## AI CLI v{{ .Version }}
+
+    Cross-platform CLI for the CAI platform via gRPC.
+
+    ### Installation
+
+    **macOS (Apple Silicon):**
+    ```bash
+    curl -sL https://github.com/bluefunda/cai-cli/releases/download/v{{ .Version }}/ai_{{ .Version }}_darwin_arm64.zip -o ai.zip
+    unzip ai.zip && chmod +x ai && sudo mv ai /usr/local/bin/
+    ```
+
+    **macOS (Intel):**
+    ```bash
+    curl -sL https://github.com/bluefunda/cai-cli/releases/download/v{{ .Version }}/ai_{{ .Version }}_darwin_amd64.zip -o ai.zip
+    unzip ai.zip && chmod +x ai && sudo mv ai /usr/local/bin/
+    ```
+
+    **Linux (x86_64):**
+    ```bash
+    curl -sL https://github.com/bluefunda/cai-cli/releases/download/v{{ .Version }}/ai_{{ .Version }}_linux_amd64.tar.gz | tar xz
+    chmod +x ai && sudo mv ai /usr/local/bin/
+    ```
+
+    **Linux (ARM64):**
+    ```bash
+    curl -sL https://github.com/bluefunda/cai-cli/releases/download/v{{ .Version }}/ai_{{ .Version }}_linux_arm64.tar.gz | tar xz
+    chmod +x ai && sudo mv ai /usr/local/bin/
+    ```
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"

@@ -46,17 +46,17 @@ func renderGRPCLoop(stream grpc.ServerStreamingClient[pb.ChatEvent]) error {
 		}
 
 		switch ev.GetType() {
-		case "content":
+		case "content", "stream_chunk":
 			fmt.Print(ev.GetContent())
-		case "error":
+		case "error", "stream_error":
 			Error(ev.GetError())
-		case "done":
+		case "done", "stream_end":
 			fmt.Println()
 			return nil
 		case "tool_call":
 			Info(fmt.Sprintf("Tool call: %s", ev.GetData()))
-		case "tool_result":
-			// Tool results are typically followed by content; skip display.
+		case "tool_result", "stream_start", "stream_heartbeat":
+			// No display needed.
 		default:
 			// Unknown event type; ignore.
 		}
