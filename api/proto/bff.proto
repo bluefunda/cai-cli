@@ -1,0 +1,253 @@
+syntax = "proto3";
+
+package bff.v1;
+
+option go_package = "github.com/bluefunda/cai-cli/api/proto/bff";
+
+// BFFService provides backend-for-frontend operations
+service BFFService {
+  // User info
+  rpc GetUserInfo(GetUserInfoRequest) returns (GetUserInfoResponse);
+
+  // Chat operations (streaming for CLI)
+  rpc Chat(ChatRequest) returns (stream ChatEvent);
+  rpc StopChat(StopChatRequest) returns (StopChatResponse);
+  rpc GenerateTitle(GenerateTitleRequest) returns (GenerateTitleResponse);
+
+  // Query operations
+  rpc GetChatIds(GetChatIdsRequest) returns (GetChatIdsResponse);
+  rpc GetChatHistory(GetChatHistoryRequest) returns (GetChatHistoryResponse);
+  rpc GetChatContext(GetChatContextRequest) returns (GetChatContextResponse);
+  rpc GetLLMModels(GetLLMModelsRequest) returns (GetLLMModelsResponse);
+  rpc GetMcpInfo(GetMcpInfoRequest) returns (GetMcpInfoResponse);
+  rpc GetMcpForUser(GetMcpForUserRequest) returns (GetMcpForUserResponse);
+  rpc SelectMcp(SelectMcpRequest) returns (SelectMcpResponse);
+  rpc GetUserSettings(GetUserSettingsRequest) returns (GetUserSettingsResponse);
+  rpc QueryRateLimit(QueryRateLimitRequest) returns (QueryRateLimitResponse);
+
+  // Stripe/Billing operations
+  rpc GetStripeSubscription(GetStripeSubscriptionRequest) returns (GetStripeSubscriptionResponse);
+  rpc GetStripePlans(GetStripePlansRequest) returns (GetStripePlansResponse);
+}
+
+// User info messages
+message GetUserInfoRequest {}
+
+message GetUserInfoResponse {
+  string sub = 1;
+  bool email_verified = 2;
+  string name = 3;
+  string preferred_username = 4;
+  string given_name = 5;
+  string family_name = 6;
+  string email = 7;
+}
+
+// Chat messages
+message ChatRequest {
+  string chat_id = 1;
+  string prompt = 2;
+  string model = 3;
+  string mcp_server_name = 4;
+  bool is_new_chat = 5;
+  string file_url = 6;
+  string raw_tool_result = 7;
+}
+
+message ChatEvent {
+  string type = 1;        // "content", "tool_call", "tool_result", "error", "done"
+  string content = 2;     // Text content for "content" events
+  string data = 3;        // JSON data for tool calls etc.
+  string error = 4;       // Error message for "error" events
+}
+
+message StopChatRequest {
+  string chat_id = 1;
+}
+
+message StopChatResponse {
+  bool success = 1;
+}
+
+message GenerateTitleRequest {
+  string chat_id = 1;
+  string prompt = 2;
+}
+
+message GenerateTitleResponse {
+  string generated_title = 1;
+  string error = 2;
+}
+
+// Chat query messages
+message GetChatIdsRequest {}
+
+message GetChatIdsResponse {
+  repeated ChatMetadata chats = 1;
+}
+
+message ChatMetadata {
+  string chat_id = 1;
+  string created_at = 2;
+  string first_prompt = 3;
+  string chat_title = 4;
+  string last_updated_at = 5;
+  string model = 6;
+  string mcp_server_name = 7;
+  string user_email = 8;
+}
+
+message GetChatHistoryRequest {
+  string chat_id = 1;
+}
+
+message GetChatHistoryResponse {
+  repeated ChatMessage messages = 1;
+}
+
+message ChatMessage {
+  string role = 1;
+  string content = 2;
+  string created_at = 3;
+  string raw_tool_result = 4;
+}
+
+// LLM models messages
+message GetLLMModelsRequest {}
+
+message GetLLMModelsResponse {
+  repeated LLMModel models = 1;
+}
+
+message LLMModel {
+  string name = 1;
+  int32 model_id = 2;
+  string object = 3;
+  string owned_by = 4;
+}
+
+// MCP messages
+message GetMcpInfoRequest {}
+
+message GetMcpInfoResponse {
+  repeated MCPInfo mcp_servers = 1;
+}
+
+message GetMcpForUserRequest {}
+
+message GetMcpForUserResponse {
+  repeated MCPInfo mcp_servers = 1;
+}
+
+message MCPInfo {
+  int32 server_id = 1;
+  string name = 2;
+  repeated string transport = 3;
+  repeated string tools = 4;
+  string mcp_server_url = 5;
+  bool subscribe = 6;
+  string registered_at = 7;
+  string short_description = 8;
+  string long_description = 9;
+  string help_url = 10;
+  string type = 11;
+  repeated string details = 12;
+  string image = 13;
+  repeated string suggestion = 14;
+  int32 timeout = 15;
+  bool is_available = 16;
+}
+
+message SelectMcpRequest {
+  MCPInfo mcp_info = 1;
+}
+
+message SelectMcpResponse {
+  bool success = 1;
+  string error = 2;
+}
+
+// User settings messages
+message GetUserSettingsRequest {}
+
+message GetUserSettingsResponse {
+  repeated LLMModel llm_models = 1;
+  repeated MCPInfo mcp_info = 2;
+  repeated MCPInfo mcp_for_user = 3;
+}
+
+// Rate limit messages
+message QueryRateLimitRequest {}
+
+message QueryRateLimitResponse {
+  bool allowed = 1;
+  int32 remaining = 2;
+  int64 reset_at = 3;
+  string error = 4;
+  UserLimitStats user_stats = 5;
+  TokenUsage token_usage = 6;
+  CircuitBreakerStats circuit_breaker = 7;
+}
+
+message UserLimitStats {
+  string plan_type = 1;
+  double hourly_percentage = 2;
+  double daily_percentage = 3;
+  double monthly_percentage = 4;
+}
+
+message TokenUsage {
+  int64 input_tokens = 1;
+  int64 output_tokens = 2;
+  int64 total_tokens = 3;
+}
+
+message CircuitBreakerStats {
+  int32 requests_per_minute = 1;
+  int32 tokens_per_minute = 2;
+  int32 violation_count = 3;
+  string last_violation = 4;
+}
+
+// Chat context messages
+message GetChatContextRequest {
+  string chat_id = 1;
+}
+
+message GetChatContextResponse {
+  repeated ChatMessage messages = 1;
+}
+
+// Stripe subscription messages
+message GetStripeSubscriptionRequest {}
+
+message GetStripeSubscriptionResponse {
+  bool has_subscription = 1;
+  string plan_name = 2;
+  string subscription_status = 3;
+  string expiration_date = 4;
+  string customer_id = 5;
+  string subscription_id = 6;
+  int64 daily_token_limit = 7;
+  int64 monthly_token_limit = 8;
+  string error = 9;
+}
+
+// Stripe plans messages
+message GetStripePlansRequest {}
+
+message GetStripePlansResponse {
+  repeated StripePlan plans = 1;
+  string error = 2;
+}
+
+message StripePlan {
+  string plan_id = 1;
+  string name = 2;
+  string description = 3;
+  int64 price_cents = 4;
+  string billing_period = 5;
+  repeated string features = 6;
+  int64 daily_token_limit = 7;
+  int64 monthly_token_limit = 8;
+}
