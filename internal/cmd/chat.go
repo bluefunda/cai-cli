@@ -173,6 +173,15 @@ func runChatStart(cmd *cobra.Command, args []string) error {
 			p.Error("Stream error: " + err.Error())
 		}
 
+		// Generate title after first successful exchange
+		if isNewChat {
+			go func(id string) {
+				tCtx, tCancel := caigrpc.ContextWithTimeout()
+				defer tCancel()
+				conn.Client.GenerateTitle(tCtx, &pb.GenerateTitleRequest{ChatId: id})
+			}(chatID)
+		}
+
 		isNewChat = false
 		fmt.Println()
 	}
