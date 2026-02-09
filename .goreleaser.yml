@@ -67,6 +67,9 @@ homebrew_casks:
     homepage: https://github.com/bluefunda/cai-cli
     description: Cross-platform CLI for the CAI platform via gRPC.
     directory: Casks
+    url:
+      headers:
+        - 'Authorization: bearer #{ENV["HOMEBREW_GITHUB_API_TOKEN"]}'
     repository:
       owner: bluefunda
       name: homebrew-tap
