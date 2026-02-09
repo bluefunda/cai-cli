@@ -36,6 +36,42 @@ archives:
     files:
       - none*
 
+nfpms:
+  - id: ai
+    package_name: ai
+    ids:
+      - ai
+    vendor: Bluefunda
+    maintainer: Bluefunda <support@bluefunda.com>
+    description: Cross-platform CLI for the CAI platform via gRPC.
+    license: MIT
+    formats:
+      - deb
+      - rpm
+    bindir: /opt/ai/bin
+    contents:
+      - dst: /opt/ai/etc
+        type: dir
+      - dst: /opt/ai/log
+        type: dir
+      - dst: /usr/local/bin/ai
+        src: /opt/ai/bin/ai
+        type: symlink
+
+homebrew_casks:
+  - name: ai
+    ids:
+      - ai
+    binaries:
+      - ai
+    homepage: https://github.com/bluefunda/cai-cli
+    description: Cross-platform CLI for the CAI platform via gRPC.
+    directory: Casks
+    repository:
+      owner: bluefunda
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+
 checksum:
   name_template: "checksums.txt"
   algorithm: sha256
@@ -63,27 +99,43 @@ release:
 
     ### Installation
 
-    **macOS (Apple Silicon):**
+    **Homebrew (macOS):**
+    ```bash
+    brew tap bluefunda/tap
+    brew install --cask ai
+    ```
+
+    **Debian/Ubuntu (x86_64):**
+    ```bash
+    curl -sL https://github.com/bluefunda/cai-cli/releases/download/v{{ .Version }}/ai_{{ .Version }}_linux_amd64.deb -o ai.deb
+    sudo dpkg -i ai.deb
+    ```
+
+    **Debian/Ubuntu (ARM64):**
+    ```bash
+    curl -sL https://github.com/bluefunda/cai-cli/releases/download/v{{ .Version }}/ai_{{ .Version }}_linux_arm64.deb -o ai.deb
+    sudo dpkg -i ai.deb
+    ```
+
+    **RPM-based (x86_64):**
+    ```bash
+    sudo rpm -i https://github.com/bluefunda/cai-cli/releases/download/v{{ .Version }}/ai_{{ .Version }}_linux_amd64.rpm
+    ```
+
+    **RPM-based (ARM64):**
+    ```bash
+    sudo rpm -i https://github.com/bluefunda/cai-cli/releases/download/v{{ .Version }}/ai_{{ .Version }}_linux_arm64.rpm
+    ```
+
+    **macOS (manual):**
     ```bash
     curl -sL https://github.com/bluefunda/cai-cli/releases/download/v{{ .Version }}/ai_{{ .Version }}_darwin_arm64.zip -o ai.zip
     unzip ai.zip && chmod +x ai && sudo mv ai /usr/local/bin/
     ```
 
-    **macOS (Intel):**
-    ```bash
-    curl -sL https://github.com/bluefunda/cai-cli/releases/download/v{{ .Version }}/ai_{{ .Version }}_darwin_amd64.zip -o ai.zip
-    unzip ai.zip && chmod +x ai && sudo mv ai /usr/local/bin/
-    ```
-
-    **Linux (x86_64):**
+    **Linux (manual):**
     ```bash
     curl -sL https://github.com/bluefunda/cai-cli/releases/download/v{{ .Version }}/ai_{{ .Version }}_linux_amd64.tar.gz | tar xz
-    chmod +x ai && sudo mv ai /usr/local/bin/
-    ```
-
-    **Linux (ARM64):**
-    ```bash
-    curl -sL https://github.com/bluefunda/cai-cli/releases/download/v{{ .Version }}/ai_{{ .Version }}_linux_arm64.tar.gz | tar xz
     chmod +x ai && sudo mv ai /usr/local/bin/
     ```
 
