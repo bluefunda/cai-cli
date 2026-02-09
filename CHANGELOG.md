@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/bluefunda/cai-cli/compare/v1.1.0...v1.1.1) (2026-02-09)
+
+
+### Bug Fixes
+
+* auto-generate chat title after first message ([0090e61](https://github.com/bluefunda/cai-cli/commit/0090e61b08c0191425ed67fd51c7672478155a25))
+
 ## [1.1.0](https://github.com/bluefunda/cai-cli/compare/v1.0.0...v1.1.0) (2026-02-09)
 
 
