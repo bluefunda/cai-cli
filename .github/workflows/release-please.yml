@@ -46,3 +46,38 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+
+      - name: Patch Homebrew cask with API asset URLs
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          TAG: ${{ needs.release-please.outputs.tag_name }}
+        run: |
+          # Fetch asset list: "name id" per line
+          assets=$(gh api "repos/bluefunda/cai-cli/releases/tags/${TAG}" \
+            --jq '.assets[] | "\(.name) \(.id)"')
+
+          # Download current cask from homebrew-tap
+          gh api repos/bluefunda/homebrew-tap/contents/Casks/ai.rb \
+            --jq '.content' | base64 -d > /tmp/ai.rb
+
+          # Replace each browser_download_url with API asset URL
+          while read -r name id; do
+            old="https://github.com/bluefunda/cai-cli/releases/download/v#{version}/${name}"
+            new="https://api.github.com/repos/bluefunda/cai-cli/releases/assets/${id}"
+            sed -i "s|${old}|${new}|g" /tmp/ai.rb
+          done <<< "$assets"
+
+          # Replace 'Authorization: bearer' with 'Authorization: token' and add Accept header
+          sed -i 's/Authorization: bearer/Authorization: token/g' /tmp/ai.rb
+          sed -i '/Authorization: token/a\          "Accept: application/octet-stream",' /tmp/ai.rb
+
+          # Get current file SHA (required for update API)
+          file_sha=$(gh api repos/bluefunda/homebrew-tap/contents/Casks/ai.rb --jq '.sha')
+
+          # Push patched cask
+          content=$(base64 -w 0 /tmp/ai.rb)
+          gh api repos/bluefunda/homebrew-tap/contents/Casks/ai.rb \
+            -X PUT \
+            -f message="fix: use API asset URLs for private repo downloads (${TAG})" \
+            -f content="${content}" \
+            -f sha="${file_sha}"
