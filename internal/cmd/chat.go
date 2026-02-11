@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
@@ -121,6 +122,18 @@ func runChatStart(cmd *cobra.Command, args []string) error {
 	scanner.Buffer(make([]byte, 0, 1024*1024), 1024*1024)
 
 	for {
+		// Proactive token check before showing prompt.
+		if conn.TS.NearExpiry(2 * time.Minute) {
+			if err := conn.TS.EnsureValidToken(); err != nil {
+				// Silent refresh failed — try inline re-auth.
+				if authErr := reAuthenticate(cfg, p); authErr != nil {
+					p.Error("Cannot restore session: " + authErr.Error())
+					return authErr
+				}
+				fmt.Println()
+			}
+		}
+
 		fmt.Print("You> ")
 		var lines []string
 		gotInput := false
@@ -165,12 +178,35 @@ func runChatStart(cmd *cobra.Command, args []string) error {
 		stream, err := conn.Client.Chat(ctx, req)
 		if err != nil {
 			cancel()
-			p.Error("Request failed: " + err.Error())
-			continue
-		}
-
-		if err := ui.RenderGRPCStream(stream, cancel); err != nil {
-			p.Error("Stream error: " + err.Error())
+			// On auth error, try inline re-auth and retry the same request.
+			if caigrpc.IsAuthError(err) {
+				if authErr := reAuthenticate(cfg, p); authErr != nil {
+					p.Error("Cannot restore session: " + authErr.Error())
+					return authErr
+				}
+				p.Info("Retrying your message...")
+				ctx2, cancel2 := context.WithCancel(context.Background())
+				stream, err = conn.Client.Chat(ctx2, req)
+				if err != nil {
+					cancel2()
+					p.Error("Retry failed: " + err.Error())
+					continue
+				}
+				if err := ui.RenderGRPCStream(stream, cancel2); err != nil {
+					p.Error("Stream error: " + err.Error())
+				}
+			} else {
+				p.Error("Request failed: " + err.Error())
+				continue
+			}
+		} else {
+			if err := ui.RenderGRPCStream(stream, cancel); err != nil {
+				if caigrpc.IsAuthError(err) {
+					p.Warn("Session expired during stream. Will re-authenticate before next prompt.")
+				} else {
+					p.Error("Stream error: " + err.Error())
+				}
+			}
 		}
 
 		// Generate title after first successful exchange

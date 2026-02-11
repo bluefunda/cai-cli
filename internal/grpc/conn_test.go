@@ -2,11 +2,15 @@ package grpc
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/bluefunda/cai-cli/internal/config"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 )
 
 func TestTokenSource_ValidToken(t *testing.T) {
@@ -150,5 +154,118 @@ func TestContextWithTimeout(t *testing.T) {
 	remaining := time.Until(deadline)
 	if remaining < 29*time.Second || remaining > 31*time.Second {
 		t.Fatalf("expected ~30s timeout, got %v", remaining)
+	}
+}
+
+func TestIsAuthError(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{"nil error", nil, false},
+		{"unauthenticated", status.Error(codes.Unauthenticated, "bad token"), true},
+		{"permission denied", status.Error(codes.PermissionDenied, "forbidden"), true},
+		{"not found", status.Error(codes.NotFound, "not found"), false},
+		{"internal", status.Error(codes.Internal, "internal"), false},
+		{"token refresh failed message", fmt.Errorf("token refresh failed (run 'ai login'): expired"), true},
+		{"not authenticated message", fmt.Errorf("not authenticated; run 'ai login'"), true},
+		{"generic error", fmt.Errorf("connection refused"), false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := IsAuthError(tt.err)
+			if got != tt.want {
+				t.Errorf("IsAuthError(%v) = %v, want %v", tt.err, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestTokenSource_NearExpiry(t *testing.T) {
+	tests := []struct {
+		name   string
+		expiry time.Time
+		within time.Duration
+		want   bool
+	}{
+		{"well before expiry", time.Now().Add(1 * time.Hour), 2 * time.Minute, false},
+		{"near expiry", time.Now().Add(1 * time.Minute), 2 * time.Minute, true},
+		{"already expired", time.Now().Add(-1 * time.Minute), 2 * time.Minute, true},
+		{"zero expiry", time.Time{}, 2 * time.Minute, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &config.Config{
+				Auth: config.Auth{
+					AccessToken: "tok",
+					TokenExpiry: tt.expiry,
+				},
+			}
+			ts := NewTokenSource(cfg, nil)
+			got := ts.NearExpiry(tt.within)
+			if got != tt.want {
+				t.Errorf("NearExpiry(%v) = %v, want %v", tt.within, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestStreamInterceptor_RetryOnUnauthenticated(t *testing.T) {
+	cfg := &config.Config{
+		Auth: config.Auth{
+			// Fake JWT with sub claim: {"sub":"u1"}
+			AccessToken: "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1MSJ9.c2ln",
+			TokenExpiry: time.Now().Add(1 * time.Hour),
+		},
+	}
+
+	refreshCalled := false
+	refreshFunc := func() (string, error) {
+		refreshCalled = true
+		cfg.Auth.AccessToken = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1MSJ9.c2ln"
+		cfg.Auth.TokenExpiry = time.Now().Add(1 * time.Hour)
+		return cfg.Auth.AccessToken, nil
+	}
+	ts := NewTokenSource(cfg, refreshFunc)
+	interceptor := authStreamInterceptor(ts)
+
+	callCount := 0
+	fakeStreamer := func(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, opts ...grpc.CallOption) (grpc.ClientStream, error) {
+		callCount++
+		if callCount == 1 {
+			return nil, status.Error(codes.Unauthenticated, "token expired")
+		}
+		return nil, nil // success on retry
+	}
+
+	_, _ = interceptor(context.Background(), &grpc.StreamDesc{}, nil, "/test", fakeStreamer)
+
+	if !refreshCalled {
+		t.Fatal("expected refresh to be called")
+	}
+	if callCount != 2 {
+		t.Fatalf("expected streamer to be called 2 times, got %d", callCount)
+	}
+}
+
+func TestEnsureValidToken(t *testing.T) {
+	cfg := &config.Config{
+		Auth: config.Auth{
+			AccessToken: "tok",
+			TokenExpiry: time.Now().Add(1 * time.Hour),
+		},
+	}
+	ts := NewTokenSource(cfg, nil)
+
+	if err := ts.EnsureValidToken(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// With no token and no refresh, should fail
+	cfg2 := &config.Config{}
+	ts2 := NewTokenSource(cfg2, nil)
+	if err := ts2.EnsureValidToken(); err == nil {
+		t.Fatal("expected error for missing token")
 	}
 }

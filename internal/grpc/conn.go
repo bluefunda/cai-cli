@@ -88,10 +88,41 @@ func (ts *TokenSource) Token() (string, error) {
 	return newToken, nil
 }
 
+// NearExpiry reports whether the token expires within the given duration.
+func (ts *TokenSource) NearExpiry(within time.Duration) bool {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	if ts.cfg.Auth.TokenExpiry.IsZero() {
+		return true
+	}
+	return time.Until(ts.cfg.Auth.TokenExpiry) < within
+}
+
+// EnsureValidToken forces a token refresh if needed, returning only the error.
+func (ts *TokenSource) EnsureValidToken() error {
+	_, err := ts.Token()
+	return err
+}
+
+// IsAuthError reports whether err represents an authentication/authorization failure.
+func IsAuthError(err error) bool {
+	if err == nil {
+		return false
+	}
+	code := status.Code(err)
+	if code == codes.Unauthenticated || code == codes.PermissionDenied {
+		return true
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "token refresh failed") ||
+		strings.Contains(msg, "not authenticated")
+}
+
 // Conn wraps a gRPC client connection and provides the BFF service client.
 type Conn struct {
 	cc     *grpc.ClientConn
 	Client pb.BFFServiceClient
+	TS     *TokenSource
 }
 
 // Dial establishes a gRPC connection to the BFF service.
@@ -116,6 +147,7 @@ func Dial(target string, ts *TokenSource, opts ...grpc.DialOption) (*Conn, error
 	return &Conn{
 		cc:     cc,
 		Client: pb.NewBFFServiceClient(cc),
+		TS:     ts,
 	}, nil
 }
 
@@ -180,6 +212,7 @@ func authUnaryInterceptor(ts *TokenSource) grpc.UnaryClientInterceptor {
 }
 
 // authStreamInterceptor injects the Bearer token into streaming RPC metadata.
+// On Unauthenticated errors, it refreshes the token and retries once.
 func authStreamInterceptor(ts *TokenSource) grpc.StreamClientInterceptor {
 	return func(
 		ctx context.Context,
@@ -193,7 +226,30 @@ func authStreamInterceptor(ts *TokenSource) grpc.StreamClientInterceptor {
 		if err != nil {
 			return nil, err
 		}
-		return streamer(ctx, desc, cc, method, opts...)
+
+		cs, err := streamer(ctx, desc, cc, method, opts...)
+		if err == nil {
+			return cs, nil
+		}
+
+		// Retry once on Unauthenticated if we can refresh.
+		if status.Code(err) == codes.Unauthenticated && ts.refreshFunc != nil {
+			ts.mu.Lock()
+			newToken, refreshErr := ts.refreshFunc()
+			if refreshErr == nil {
+				ts.cfg.Auth.AccessToken = newToken
+			}
+			ts.mu.Unlock()
+			if refreshErr != nil {
+				return nil, err
+			}
+			ctx, err = attachToken(ctx, ts)
+			if err != nil {
+				return nil, err
+			}
+			return streamer(ctx, desc, cc, method, opts...)
+		}
+		return nil, err
 	}
 }
 

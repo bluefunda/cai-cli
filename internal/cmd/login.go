@@ -4,7 +4,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/bluefunda/cai-cli/internal/auth"
-	"github.com/bluefunda/cai-cli/internal/config"
 	"github.com/bluefunda/cai-cli/internal/ui"
 )
 
@@ -23,11 +22,7 @@ func runLogin(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	cfg.Auth.AccessToken = tok.AccessToken
-	cfg.Auth.RefreshToken = tok.RefreshToken
-	cfg.Auth.TokenExpiry = tok.Expiry()
-
-	if err := config.Save(cfg); err != nil {
+	if err := saveAuthTokens(cfg, tok); err != nil {
 		ui.Error("Failed to save config: " + err.Error())
 		return err
 	}
