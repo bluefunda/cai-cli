@@ -135,7 +135,7 @@ func startTestServer(t *testing.T) pb.BFFServiceClient {
 	if err != nil {
 		t.Fatalf("dial bufconn: %v", err)
 	}
-	t.Cleanup(func() { cc.Close() })
+	t.Cleanup(func() { _ = cc.Close() })
 
 	return pb.NewBFFServiceClient(cc)
 }

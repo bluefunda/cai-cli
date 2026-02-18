@@ -214,7 +214,7 @@ func runChatStart(cmd *cobra.Command, args []string) error {
 			go func(id string) {
 				tCtx, tCancel := caigrpc.ContextWithTimeout()
 				defer tCancel()
-				conn.Client.GenerateTitle(tCtx, &pb.GenerateTitleRequest{ChatId: id})
+				_, _ = conn.Client.GenerateTitle(tCtx, &pb.GenerateTitleRequest{ChatId: id})
 			}(chatID)
 		}
 
