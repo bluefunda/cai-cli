@@ -253,44 +253,77 @@ func authStreamInterceptor(ts *TokenSource) grpc.StreamClientInterceptor {
 	}
 }
 
-// attachToken reads the current token, extracts the user ID (sub claim) from
-// the JWT, and attaches authorization, realm, and user ID as gRPC metadata.
+// attachToken reads the current token, extracts the user ID (sub claim) and
+// realm from the JWT, and attaches authorization, realm, and user ID as gRPC metadata.
 func attachToken(ctx context.Context, ts *TokenSource) (context.Context, error) {
 	token, err := ts.Token()
 	if err != nil {
 		return ctx, err
 	}
-	sub, err := subFromJWT(token)
+	claims, err := claimsFromJWT(token)
 	if err != nil {
-		return ctx, fmt.Errorf("extract user ID from token: %w", err)
+		return ctx, fmt.Errorf("extract claims from token: %w", err)
 	}
+	realm := realmFromIssuer(claims.Iss)
 	md := metadata.Pairs(
 		"authorization", "Bearer "+token,
-		"x-realm", config.DefaultRealm,
-		"x-user-id", sub,
+		"x-realm", realm,
+		"x-user-id", claims.Sub,
 	)
 	return metadata.NewOutgoingContext(ctx, md), nil
 }
 
-// subFromJWT decodes the JWT payload and returns the sub claim.
+// jwtClaims holds the JWT claims needed for gRPC metadata.
+type jwtClaims struct {
+	Sub string `json:"sub"`
+	Iss string `json:"iss"`
+}
+
+// claimsFromJWT decodes the JWT payload and returns sub and iss claims.
 // No signature verification — the BFF validates the token.
-func subFromJWT(token string) (string, error) {
+func claimsFromJWT(token string) (*jwtClaims, error) {
 	parts := strings.SplitN(token, ".", 3)
 	if len(parts) != 3 {
-		return "", fmt.Errorf("invalid JWT format")
+		return nil, fmt.Errorf("invalid JWT format")
 	}
 	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
 	if err != nil {
-		return "", fmt.Errorf("decode JWT payload: %w", err)
+		return nil, fmt.Errorf("decode JWT payload: %w", err)
 	}
-	var claims struct {
-		Sub string `json:"sub"`
-	}
+	var claims jwtClaims
 	if err := json.Unmarshal(payload, &claims); err != nil {
-		return "", fmt.Errorf("parse JWT claims: %w", err)
+		return nil, fmt.Errorf("parse JWT claims: %w", err)
 	}
 	if claims.Sub == "" {
-		return "", fmt.Errorf("JWT missing sub claim")
+		return nil, fmt.Errorf("JWT missing sub claim")
+	}
+	return &claims, nil
+}
+
+// realmFromIssuer extracts the realm name from a Keycloak issuer URL.
+// Expected format: https://auth.example.com/realms/{realm}
+// Falls back to DefaultRealm if parsing fails.
+func realmFromIssuer(issuer string) string {
+	const marker = "/realms/"
+	idx := strings.Index(issuer, marker)
+	if idx == -1 {
+		return config.DefaultRealm
+	}
+	remaining := issuer[idx+len(marker):]
+	if slashIdx := strings.Index(remaining, "/"); slashIdx != -1 {
+		remaining = remaining[:slashIdx]
+	}
+	if remaining == "" {
+		return config.DefaultRealm
+	}
+	return remaining
+}
+
+// subFromJWT decodes the JWT payload and returns the sub claim.
+func subFromJWT(token string) (string, error) {
+	claims, err := claimsFromJWT(token)
+	if err != nil {
+		return "", err
 	}
 	return claims.Sub, nil
 }
