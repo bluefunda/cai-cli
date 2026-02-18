@@ -6,27 +6,40 @@ on:
 
 jobs:
   release:
-    uses: bluefunda/release-foundry/.github/workflows/go-binary-release.yml@main
+    uses: bluefunda/release-foundry/.github/workflows/release-please.yml@main
     permissions:
       contents: write
       pull-requests: write
+
+  goreleaser:
+    needs: release
+    if: ${{ needs.release.outputs.release_created }}
+    uses: bluefunda/release-foundry/.github/workflows/go-binary-release.yml@main
+    with:
+      tag: ${{ needs.release.outputs.tag_name }}
+    permissions:
+      contents: write
     secrets:
       GH_PAT: ${{ secrets.GH_PAT }}
       HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
 
   homebrew-patch:
-    needs: release
+    needs: [release, goreleaser]
     if: ${{ needs.release.outputs.release_created }}
     runs-on: ubuntu-latest
     steps:
       - name: Patch Homebrew cask with API asset URLs
         env:
-          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          GH_PAT: ${{ secrets.GH_PAT }}
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           TAG: ${{ needs.release.outputs.tag_name }}
         run: |
-          # Fetch asset list: "name id" per line
-          assets=$(gh api "repos/bluefunda/cai-cli/releases/tags/${TAG}" \
+          # Use GH_PAT to read cai-cli releases (private repo)
+          assets=$(GH_TOKEN="$GH_PAT" gh api "repos/bluefunda/cai-cli/releases/tags/${TAG}" \
             --jq '.assets[] | "\(.name) \(.id)"')
+
+          # Use HOMEBREW_TAP_TOKEN to read/write homebrew-tap
+          export GH_TOKEN="$HOMEBREW_TAP_TOKEN"
 
           # Download current cask from homebrew-tap
           gh api repos/bluefunda/homebrew-tap/contents/Casks/ai.rb \
