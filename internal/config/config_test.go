@@ -56,10 +56,25 @@ func TestDefaultConfig(t *testing.T) {
 	}
 }
 
-func TestAuthURL(t *testing.T) {
-	url := AuthURL("example.com")
+func TestAuthURL_DefaultRealm(t *testing.T) {
+	url := AuthURL("example.com", "")
 	expected := "https://auth.example.com/realms/trm/protocol/openid-connect"
 	if url != expected {
 		t.Errorf("expected %s, got %s", expected, url)
+	}
+}
+
+func TestAuthURL_CustomRealm(t *testing.T) {
+	url := AuthURL("example.com", "individual")
+	expected := "https://auth.example.com/realms/individual/protocol/openid-connect"
+	if url != expected {
+		t.Errorf("expected %s, got %s", expected, url)
+	}
+}
+
+func TestDefaultConfig_Realm(t *testing.T) {
+	cfg := defaultConfig()
+	if cfg.Realm != DefaultRealm {
+		t.Errorf("expected realm %s, got %s", DefaultRealm, cfg.Realm)
 	}
 }
