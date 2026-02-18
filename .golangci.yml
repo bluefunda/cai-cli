@@ -1,0 +1,13 @@
+version: "2"
+
+linters:
+  settings:
+    errcheck:
+      exclude-functions:
+        # CLI output — errors writing to stdout/stderr are unrecoverable
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+        - (io.Closer).Close
+        - (*text/tabwriter.Writer).Flush
+        - (*encoding/json.Encoder).Encode

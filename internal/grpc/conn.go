@@ -319,15 +319,6 @@ func realmFromIssuer(issuer string) string {
 	return remaining
 }
 
-// subFromJWT decodes the JWT payload and returns the sub claim.
-func subFromJWT(token string) (string, error) {
-	claims, err := claimsFromJWT(token)
-	if err != nil {
-		return "", err
-	}
-	return claims.Sub, nil
-}
-
 // ContextWithTimeout returns a context with the default unary timeout.
 func ContextWithTimeout() (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), DefaultTimeout)

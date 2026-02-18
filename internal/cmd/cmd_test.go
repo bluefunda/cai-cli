@@ -121,9 +121,7 @@ func startTestServer(t *testing.T) pb.BFFServiceClient {
 	pb.RegisterBFFServiceServer(srv, &testBFF{})
 
 	go func() {
-		if err := srv.Serve(lis); err != nil {
-			// Server stopped; ignore.
-		}
+		_ = srv.Serve(lis)
 	}()
 	t.Cleanup(func() { srv.Stop() })
 
