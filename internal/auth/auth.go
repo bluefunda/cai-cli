@@ -54,7 +54,7 @@ func LoginWithDevice(domain, realm string) (*TokenResponse, error) {
 	if err != nil {
 		return nil, fmt.Errorf("device auth request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -117,7 +117,7 @@ func pollToken(tokenURL, deviceCode string) (*TokenResponse, bool, error) {
 	if err != nil {
 		return nil, false, fmt.Errorf("token poll: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -166,7 +166,7 @@ func postToken(tokenURL string, data url.Values) (*TokenResponse, error) {
 	if err != nil {
 		return nil, fmt.Errorf("token request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
