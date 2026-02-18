@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.1](https://github.com/bluefunda/cai-cli/compare/v1.2.0...v1.2.1) (2026-02-18)
+
+
+### Bug Fixes
+
+* homebrew-patch token and standardize release workflow ([#10](https://github.com/bluefunda/cai-cli/issues/10)) ([bc661bf](https://github.com/bluefunda/cai-cli/commit/bc661bfb3e96bccbf00e614541992b2fda0f1265))
+
 ## [1.2.0](https://github.com/bluefunda/cai-cli/compare/v1.1.1...v1.2.0) (2026-02-18)
 
 
