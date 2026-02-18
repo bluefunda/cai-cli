@@ -40,8 +40,8 @@ type deviceAuthResponse struct {
 // LoginWithDevice performs an OAuth2 Device Authorization Grant (RFC 8628).
 // It shows a user code, opens the browser for verification, and polls
 // until the user completes login.
-func LoginWithDevice(domain string) (*TokenResponse, error) {
-	baseURL := config.AuthURL(domain)
+func LoginWithDevice(domain, realm string) (*TokenResponse, error) {
+	baseURL := config.AuthURL(domain, realm)
 
 	// Step 1: Request device code
 	deviceURL := baseURL + "/auth/device"
@@ -54,7 +54,7 @@ func LoginWithDevice(domain string) (*TokenResponse, error) {
 	if err != nil {
 		return nil, fmt.Errorf("device auth request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -117,7 +117,7 @@ func pollToken(tokenURL, deviceCode string) (*TokenResponse, bool, error) {
 	if err != nil {
 		return nil, false, fmt.Errorf("token poll: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -151,8 +151,8 @@ func pollToken(tokenURL, deviceCode string) (*TokenResponse, bool, error) {
 }
 
 // Refresh performs a Keycloak refresh_token grant.
-func Refresh(domain, refreshToken string) (*TokenResponse, error) {
-	tokenURL := config.AuthURL(domain) + "/token"
+func Refresh(domain, realm, refreshToken string) (*TokenResponse, error) {
+	tokenURL := config.AuthURL(domain, realm) + "/token"
 	data := url.Values{
 		"grant_type":    {"refresh_token"},
 		"client_id":     {config.DefaultClientID},
@@ -166,7 +166,7 @@ func postToken(tokenURL string, data url.Values) (*TokenResponse, error) {
 	if err != nil {
 		return nil, fmt.Errorf("token request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {

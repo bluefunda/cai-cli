@@ -18,9 +18,12 @@ const (
 	DefaultClientID   = "cai-cli"
 )
 
-// AuthURL returns the Keycloak OpenID Connect base URL.
-func AuthURL(domain string) string {
-	return fmt.Sprintf("https://auth.%s/realms/%s/protocol/openid-connect", domain, DefaultRealm)
+// AuthURL returns the Keycloak OpenID Connect base URL for the given realm.
+func AuthURL(domain, realm string) string {
+	if realm == "" {
+		realm = DefaultRealm
+	}
+	return fmt.Sprintf("https://auth.%s/realms/%s/protocol/openid-connect", domain, realm)
 }
 
 // Config represents the CLI configuration stored in ~/.cai/config.yaml.
@@ -28,6 +31,7 @@ type Config struct {
 	GatewayURL string   `yaml:"gateway_url"`
 	BFFURL     string   `yaml:"bff_url"`
 	Domain     string   `yaml:"domain"`
+	Realm      string   `yaml:"realm"`
 	Auth       Auth     `yaml:"auth"`
 	Defaults   Defaults `yaml:"defaults"`
 }
@@ -95,6 +99,9 @@ func Load() (*Config, error) {
 	if cfg.Domain == "" {
 		cfg.Domain = DefaultDomain
 	}
+	if cfg.Realm == "" {
+		cfg.Realm = DefaultRealm
+	}
 	if cfg.Defaults.Model == "" {
 		cfg.Defaults.Model = "openai"
 	}
@@ -106,6 +113,7 @@ func defaultConfig() *Config {
 		GatewayURL: DefaultGatewayURL,
 		BFFURL:     DefaultBFFURL,
 		Domain:     DefaultDomain,
+		Realm:      DefaultRealm,
 		Defaults:   Defaults{Model: "openai", Output: "text"},
 	}
 }

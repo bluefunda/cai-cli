@@ -1,0 +1,15 @@
+version: "2"
+
+linters:
+  settings:
+    errcheck:
+      exclude-functions:
+        # CLI output — errors writing to stdout/stderr are unrecoverable
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+        - (*text/tabwriter.Writer).Flush
+        - (*encoding/json.Encoder).Encode
+        # Deferred cleanup — errors on close are unactionable in CLI
+        - (*github.com/bluefunda/cai-cli/internal/grpc.Conn).Close
+        - (*google.golang.org/grpc.ClientConn).Close

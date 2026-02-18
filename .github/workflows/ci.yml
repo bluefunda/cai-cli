@@ -1,31 +1,13 @@
 name: CI
 
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
-
-permissions:
-  contents: read
+  push:
+    branches: [main]
 
 jobs:
-  build-and-test:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-
-      - name: Vet
-        run: go vet ./...
-
-      - name: Test
-        run: go test -race -count=1 ./...
-
-      - name: Build
-        run: go build -o /dev/null ./cmd/ai
+  ci:
+    uses: bluefunda/release-foundry/.github/workflows/go-ci.yml@main
+    secrets:
+      GH_PAT: ${{ secrets.GH_PAT }}
