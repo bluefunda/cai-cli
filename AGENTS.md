@@ -146,6 +146,16 @@ Do not hardcode version strings.
 
 ## Git and Branch Conventions
 
+### Org-level standards
+
+All `bluefunda` repos follow these shared conventions (defined in `bluefunda/.github`):
+
+- **PR template**: Org-level template at `bluefunda/.github/.github/PULL_REQUEST_TEMPLATE.md`. Each repo carries an identical copy in `.github/PULL_REQUEST_TEMPLATE.md`.
+- **CI**: Reusable workflows from `bluefunda/release-foundry`. All Go repos use `go-ci.yml` (lint + test + build).
+- **Conventional Commits**: Enforced via Release Please across all repos.
+- **Branch protection**: `main` is protected — requires PR + CI pass, no direct pushes.
+- **Required secrets**: `GH_PAT` (GitHub PAT for private `bluefunda/*` modules). Additional per-repo secrets documented below.
+
 ### Commit messages
 Use **Conventional Commits** — Release Please parses these for automated versioning:
 - `feat:` — New feature (minor version bump)
@@ -160,7 +170,7 @@ Use **Conventional Commits** — Release Please parses these for automated versi
 Scopes are optional: `feat(auth): add SSO login`
 
 ### Branch naming
-- `main` — Protected branch, requires PR + CI pass
+- `main` — Protected release branch, requires PR + CI pass
 - Feature branches: `feat/<short-description>` or `fix/<short-description>`
 - Do NOT push directly to `main`
 
@@ -190,6 +200,10 @@ Fully automated — do NOT manually tag or create releases:
 1. Merge conventional commits to `main`
 2. Release Please opens a version-bump PR
 3. Merging that PR triggers GoReleaser → binaries → GitHub Release → Homebrew tap
+
+### CI/CD secrets (this repo)
+- `GH_PAT` — GitHub PAT for private module access (org-wide)
+- `HOMEBREW_TAP_TOKEN` — Token for patching Homebrew tap with private asset URLs
 
 ## Dependencies
 
