@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -118,6 +119,7 @@ func runChatStart(cmd *cobra.Command, args []string) error {
 	p.Info("Type /exit or Ctrl+D to quit. Use \\ at end of line for multiline input.")
 	fmt.Println()
 
+	var wg sync.WaitGroup
 	scanner := bufio.NewScanner(os.Stdin)
 	scanner.Buffer(make([]byte, 0, 1024*1024), 1024*1024)
 
@@ -155,6 +157,7 @@ func runChatStart(cmd *cobra.Command, args []string) error {
 		}
 		if !gotInput {
 			fmt.Println()
+			wg.Wait()
 			return nil
 		}
 
@@ -163,6 +166,7 @@ func runChatStart(cmd *cobra.Command, args []string) error {
 			continue
 		}
 		if input == "/exit" {
+			wg.Wait()
 			return nil
 		}
 
@@ -211,11 +215,13 @@ func runChatStart(cmd *cobra.Command, args []string) error {
 
 		// Generate title after first successful exchange
 		if isNewChat {
-			go func(id string) {
+			wg.Add(1)
+			go func(id, prompt string) {
+				defer wg.Done()
 				tCtx, tCancel := caigrpc.ContextWithTimeout()
 				defer tCancel()
-				_, _ = conn.Client.GenerateTitle(tCtx, &pb.GenerateTitleRequest{ChatId: id})
-			}(chatID)
+				_, _ = conn.Client.GenerateTitle(tCtx, &pb.GenerateTitleRequest{ChatId: id, Prompt: prompt})
+			}(chatID, input)
 		}
 
 		isNewChat = false
