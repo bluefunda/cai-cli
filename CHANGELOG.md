@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.2.2](https://github.com/bluefunda/cai-cli/compare/v1.2.1...v1.2.2) (2026-03-10)
+
+
+### Bug Fixes
+
+* pass user prompt to GenerateTitle for chat title generation ([#17](https://github.com/bluefunda/cai-cli/issues/17)) ([202a9cd](https://github.com/bluefunda/cai-cli/commit/202a9cd795a02f144afb9166201c0232b2ee097d))
+* strip &lt;think&gt; tags from LLM streaming output ([#14](https://github.com/bluefunda/cai-cli/issues/14)) ([fc2a496](https://github.com/bluefunda/cai-cli/commit/fc2a4960aea01abd961a5e44fb34abea735daf0c))
+
 ## [1.2.1](https://github.com/bluefunda/cai-cli/compare/v1.2.0...v1.2.1) (2026-02-18)
 
 
