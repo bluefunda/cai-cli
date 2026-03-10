@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.3](https://github.com/bluefunda/cai-cli/compare/v1.2.2...v1.2.3) (2026-03-10)
+
+
+### Bug Fixes
+
+* handle unclosed &lt;think&gt; tags in streaming filter (Sarvam) ([#18](https://github.com/bluefunda/cai-cli/issues/18)) ([fd2043d](https://github.com/bluefunda/cai-cli/commit/fd2043ddf6912bd7a26221d0bc613443816db8fc))
+
 ## [1.2.2](https://github.com/bluefunda/cai-cli/compare/v1.2.1...v1.2.2) (2026-03-10)
 
 
