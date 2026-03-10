@@ -13,10 +13,12 @@ import (
 )
 
 // thinkFilter strips <think>...</think> blocks from streamed content.
-// It handles tags that span multiple chunks.
+// It handles tags that span multiple chunks. If a <think> block is never
+// closed (e.g. Sarvam), Flush() returns the suppressed content.
 type thinkFilter struct {
-	inside bool   // true when inside a <think> block
-	buf    string // partial tag buffer
+	inside     bool   // true when inside a <think> block
+	buf        string // partial tag buffer
+	suppressed string // content inside unclosed <think> (recovered on Flush)
 }
 
 func (f *thinkFilter) Filter(chunk string) string {
@@ -27,14 +29,18 @@ func (f *thinkFilter) Filter(chunk string) string {
 		if f.inside {
 			idx := strings.Index(f.buf, "</think>")
 			if idx >= 0 {
+				// Closed think block — discard suppressed content
+				f.suppressed = ""
 				f.buf = f.buf[idx+len("</think>"):]
 				f.inside = false
 				continue
 			}
-			// Could be a partial </think> at the end — keep the tail.
+			// No closing tag yet — buffer content for potential recovery
 			if partialLen := partialSuffix(f.buf, "</think>"); partialLen > 0 {
+				f.suppressed += f.buf[:len(f.buf)-partialLen]
 				f.buf = f.buf[len(f.buf)-partialLen:]
 			} else {
+				f.suppressed += f.buf
 				f.buf = ""
 			}
 			return out.String()
@@ -45,6 +51,7 @@ func (f *thinkFilter) Filter(chunk string) string {
 			out.WriteString(f.buf[:idx])
 			f.buf = f.buf[idx+len("<think>"):]
 			f.inside = true
+			f.suppressed = ""
 			continue
 		}
 		// Check for a partial <think> at the end of the buffer.
@@ -60,14 +67,20 @@ func (f *thinkFilter) Filter(chunk string) string {
 	return out.String()
 }
 
-// Flush returns any remaining buffered content (partial tag that never completed).
+// Flush returns any remaining buffered content.
+// If still inside an unclosed <think> block, returns the suppressed content
+// since some models (e.g. Sarvam) emit <think> without a closing tag.
 func (f *thinkFilter) Flush() string {
-	s := f.buf
-	f.buf = ""
+	var result string
 	if f.inside {
-		return ""
+		result = f.suppressed + f.buf
+	} else {
+		result = f.buf
 	}
-	return s
+	f.buf = ""
+	f.suppressed = ""
+	f.inside = false
+	return result
 }
 
 // partialSuffix returns the length of the longest suffix of s that is a prefix of tag.

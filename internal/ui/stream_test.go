@@ -50,3 +50,16 @@ func TestThinkFilter_OnlyThink(t *testing.T) {
 		t.Errorf("got %q, want %q", got, "")
 	}
 }
+
+func TestThinkFilter_UnclosedThink_SarvamPattern(t *testing.T) {
+	// Sarvam emits <think>\n followed by actual answer, never closes it
+	f := &thinkFilter{}
+	var out string
+	out += f.Filter("<think>")
+	out += f.Filter("\n")
+	out += f.Filter("The answer is 4.")
+	out += f.Flush()
+	if out != "\nThe answer is 4." {
+		t.Errorf("got %q, want %q", out, "\nThe answer is 4.")
+	}
+}
