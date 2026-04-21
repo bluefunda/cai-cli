@@ -4,6 +4,8 @@ Command line interface for [BlueFunda AI](https://bluefunda.com/bluefunda-ai/) â
 
 The binary is `ai`. Use it to chat with BlueFunda AI, manage MCP tool integrations, and inspect your account and usage from the terminal.
 
+> **Prefer the browser?** You can also use BlueFunda AI directly at [bluefunda.com/login](https://bluefunda.com/login) â€” no install required.
+
 ## Installation
 
 ### From GitHub Releases
