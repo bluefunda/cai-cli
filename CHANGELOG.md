@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.3.0](https://github.com/bluefunda/cai-cli/compare/v1.2.3...v1.3.0) (2026-04-21)
+
+
+### Features
+
+* add Homebrew Formula for Linux and macOS install ([#23](https://github.com/bluefunda/cai-cli/issues/23)) ([1e47a18](https://github.com/bluefunda/cai-cli/commit/1e47a18a68485ea53ce6033bbad957a358291f9d))
+* add install.sh for one-line installation ([#26](https://github.com/bluefunda/cai-cli/issues/26)) ([22d6fb1](https://github.com/bluefunda/cai-cli/commit/22d6fb13cf03f95014a849bef0ba5873363fe3c0))
+
 ## [1.2.3](https://github.com/bluefunda/cai-cli/compare/v1.2.2...v1.2.3) (2026-03-10)
 
 
