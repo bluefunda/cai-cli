@@ -58,21 +58,6 @@ nfpms:
         src: /opt/ai/bin/ai
         type: symlink
 
-brews:
-  - name: ai
-    ids:
-      - ai
-    homepage: https://github.com/bluefunda/cai-cli
-    description: CLI for BlueFunda AI — context-aware AI agents for SAP operations
-    license: MIT
-    directory: Formula
-    repository:
-      owner: bluefunda
-      name: homebrew-tap
-      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
-    test: |
-      system "#{bin}/ai", "version"
-
 homebrew_casks:
   - name: ai
     ids:
@@ -114,10 +99,15 @@ release:
 
     ### Installation
 
-    **Homebrew (macOS and Linux):**
+    **Homebrew (macOS):**
     ```bash
     brew tap bluefunda/tap
-    brew install ai
+    brew install --cask ai
+    ```
+
+    **Linux (install script):**
+    ```bash
+    curl -fsSL https://github.com/bluefunda/cai-cli/releases/latest/download/install.sh | sh
     ```
 
     **Debian/Ubuntu (x86_64):**
