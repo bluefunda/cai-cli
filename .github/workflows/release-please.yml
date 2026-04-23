@@ -32,12 +32,12 @@ jobs:
     steps:
       - name: Patch Homebrew cask with API asset URLs
         env:
-          GH_PAT: ${{ secrets.GH_PAT }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           TAG: ${{ needs.release.outputs.tag_name }}
         run: |
-          # Use GH_PAT to read cai-cli releases (private repo)
-          assets=$(GH_TOKEN="$GH_PAT" gh api "repos/bluefunda/cai-cli/releases/tags/${TAG}" \
+          # cai-cli is public — GITHUB_TOKEN is sufficient to read releases
+          assets=$(GH_TOKEN="$GITHUB_TOKEN" gh api "repos/bluefunda/cai-cli/releases/tags/${TAG}" \
             --jq '.assets[] | "\(.name) \(.id)"')
 
           # Use HOMEBREW_TAP_TOKEN to read/write homebrew-tap
