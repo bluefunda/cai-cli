@@ -70,7 +70,7 @@ homebrew_casks:
     repository:
       owner: bluefunda
       name: homebrew-tap
-      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
 
 checksum:
   name_template: "checksums.txt"
