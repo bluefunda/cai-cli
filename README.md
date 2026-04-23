@@ -8,6 +8,21 @@ The binary is `ai`. Use it to chat with BlueFunda AI, manage MCP tool integratio
 
 ## Installation
 
+### One-line installer (macOS and Linux)
+
+```bash
+sh -c "$(curl -fsSL https://raw.githubusercontent.com/bluefunda/cai-cli/main/install.sh)"
+```
+
+Installs to `/usr/local/bin` if writable, otherwise `~/.local/bin`. Override with `AI_INSTALL_DIR`.
+
+### Homebrew (macOS)
+
+```bash
+brew tap bluefunda/tap
+brew install --cask ai
+```
+
 ### From GitHub Releases
 
 Download the binary for your platform from the [releases page](https://github.com/bluefunda/cai-cli/releases/latest).
