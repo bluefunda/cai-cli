@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.2](https://github.com/bluefunda/cai-cli/compare/v1.3.1...v1.3.2) (2026-04-23)
+
+
+### Bug Fixes
+
+* use GITHUB_TOKEN instead of GH_PAT in homebrew-patch job ([#29](https://github.com/bluefunda/cai-cli/issues/29)) ([a2839e5](https://github.com/bluefunda/cai-cli/commit/a2839e59a457f48b09166fced14d2306a70c8eca))
+
 ## [1.3.1](https://github.com/bluefunda/cai-cli/compare/v1.3.0...v1.3.1) (2026-04-23)
 
 
