@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.3](https://github.com/bluefunda/cai-cli/compare/v1.3.2...v1.3.3) (2026-04-23)
+
+
+### Bug Fixes
+
+* align HOMEBREW_TAP_TOKEN env var name with reusable workflow ([#31](https://github.com/bluefunda/cai-cli/issues/31)) ([138fb4d](https://github.com/bluefunda/cai-cli/commit/138fb4dd540bf471b0f8f75398256ea656346943))
+
 ## [1.3.2](https://github.com/bluefunda/cai-cli/compare/v1.3.1...v1.3.2) (2026-04-23)
 
 
