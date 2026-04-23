@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.1](https://github.com/bluefunda/cai-cli/compare/v1.3.0...v1.3.1) (2026-04-23)
+
+
+### Bug Fixes
+
+* remove deprecated brews key, use homebrew_casks only ([#27](https://github.com/bluefunda/cai-cli/issues/27)) ([a0604b7](https://github.com/bluefunda/cai-cli/commit/a0604b787952b90bfedcbbc5bd8c14dc086f3cfa))
+
 ## [1.3.0](https://github.com/bluefunda/cai-cli/compare/v1.2.3...v1.3.0) (2026-04-21)
 
 
