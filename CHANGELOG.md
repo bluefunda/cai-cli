@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.4.0](https://github.com/bluefunda/cai-cli/compare/v1.3.3...v1.4.0) (2026-04-24)
+
+
+### Features
+
+* add Docker image publishing to Docker Hub and ghcr.io ([#33](https://github.com/bluefunda/cai-cli/issues/33)) ([4603477](https://github.com/bluefunda/cai-cli/commit/4603477ba286866773266079054e3dd471650e01))
+
+
+### Bug Fixes
+
+* use DOCKER_USERNAME/DOCKER_PASSWORD org secrets for Docker Hub ([#35](https://github.com/bluefunda/cai-cli/issues/35)) ([ca34a55](https://github.com/bluefunda/cai-cli/commit/ca34a5533af92a58c6ee94ba4dea0bfd1eca82c7))
+
 ## [1.3.3](https://github.com/bluefunda/cai-cli/compare/v1.3.2...v1.3.3) (2026-04-23)
 
 
